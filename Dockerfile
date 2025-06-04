@@ -1,29 +1,35 @@
-# Use the official Ubuntu minimal image
-FROM ubuntu:latest
+# Use the official Python slim image as a base
+FROM python:3.13-slim
 
-# Install Python, pip, and other necessary packages
+# Install zip utility
 RUN apt-get update && \
-    apt-get install -y python3 python3-pip python3-venv zip pkg-config poppler-utils libpoppler-cpp-dev && \
-    apt-get clean
+    apt-get install -y zip && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
 
-# Create a directory for the layer
-RUN mkdir -p /lambda-layer/python
+# Set a working directory for building the layer's contents
+# This directory is internal to the image and won't be affected by runtime volume mounts
+WORKDIR /buildarea
+RUN mkdir python
 
-# Copy the requirements.txt file
-COPY requirements.txt /lambda-layer/
+# Copy the requirements file into the build area
+COPY requirements.txt .
 
-# Create a virtual environment
-RUN python3 -m venv /lambda-layer/venv
+# Install Python dependencies into the 'python' subdirectory
+# These flags ensure compatibility with the AWS Lambda environment
+RUN pip install \
+    --platform manylinux2014_x86_64 \
+    --implementation cp \
+    --python-version 3.13 \
+    --only-binary=:all: \
+    --target=python \
+    -r requirements.txt
 
-# Activate the virtual environment and install the Python packages
-RUN /lambda-layer/venv/bin/pip install --upgrade pip && \
-    /lambda-layer/venv/bin/pip install --platform manylinux2014_x86_64 --implementation cp --python-version 3.11 --only-binary=:all: --target=/lambda-layer/python -r /lambda-layer/requirements.txt
+# Create the zip file containing the 'python' directory with its installed packages
+RUN zip -r lambda-layer.zip python
 
-# Set the working directory
-WORKDIR /lambda-layer
-
-# Zip the contents of the layer
-RUN zip -r /lambda-layer.zip python
-
-# Move the zip file to the mounted directory
-CMD ["cp", "/lambda-layer.zip", "/lambda-layer/lambda-layer.zip"]
+# The CMD instruction will be executed when the container runs.
+# It copies the generated zip file from the internal build area
+# to the '/lambda-layer/' directory, which is expected to be a mounted volume
+# from the host, allowing the zip file to be accessed on the host system.
+CMD ["cp", "/buildarea/lambda-layer.zip", "/lambda-layer/lambda-layer.zip"]

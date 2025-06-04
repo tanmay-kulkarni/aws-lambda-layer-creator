@@ -1,9 +1,1 @@
-boto3
-requests
-openai
-pdf2image
-python-dotenv
-psycopg2-binary
-sqlalchemy
-pydantic==2.9.2
-pydantic-core
+polars
